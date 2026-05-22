@@ -20,13 +20,63 @@ jobs:
           DATA_DIR: /tmp
         run: |
           python3 << 'PYEOF'
-          import sys, importlib
+          import sys, importlib, time, json, requests
+
           SETTINGS = {"shpock_max_price": "300", "shpock_radius": "0"}
           mod = importlib.import_module("app.scrapers.shpock")
-          items = mod.ShpockScraper(SETTINGS).search("kinderwagen", max_results=3)
-          if items:
-              print(f"OK: {len(items)} Ergebnisse")
-          else:
-              print("FAIL: 0 Ergebnisse – GraphQL-Schema möglicherweise geändert")
-              sys.exit(1)
+
+          def raw_api_check():
+              """Direkt-Check: zeigt was die API tatsächlich zurückgibt."""
+              try:
+                  payload = {
+                      "query": mod.ITEM_SEARCH_QUERY,
+                      "variables": {
+                          "serializedFilters": json.dumps({"q": "kinderwagen"}),
+                          "pagination": {"limit": 3, "offset": 0},
+                          "trackingSource": "Search",
+                      },
+                  }
+                  resp = requests.post(mod.API_URL, json=payload, headers=mod.HEADERS, timeout=15)
+                  data = resp.json()
+                  errors = data.get("errors")
+                  if errors:
+                      print(f"  → GraphQL-Fehler: {errors}")
+                      return "graphql_error"
+                  ir = data.get("data", {}).get("itemSearch", {}).get("itemResults", [])
+                  total = data.get("data", {}).get("itemSearch", {}).get("total", "?")
+                  count = sum(len(g.get("items", [])) for g in ir)
+                  print(f"  → HTTP {resp.status_code}, total={total}, items_im_payload={count}")
+                  return "ok" if count > 0 else "empty"
+              except Exception as e:
+                  print(f"  → Exception: {e}")
+                  return "exception"
+
+          max_attempts = 3
+          for attempt in range(1, max_attempts + 1):
+              print(f"Versuch {attempt}/{max_attempts}…")
+              raw_status = raw_api_check()
+
+              if raw_status == "graphql_error":
+                  print("FAIL: GraphQL-Schema hat sich geändert – Scraper muss angepasst werden.")
+                  sys.exit(1)
+
+              items = mod.ShpockScraper(SETTINGS).search("kinderwagen", max_results=3)
+              if items:
+                  print(f"OK: {len(items)} Ergebnisse")
+                  sys.exit(0)
+
+              if raw_status == "empty":
+                  print("  → API erreichbar, aber 0 Ergebnisse (IP-Blocking oder temporäre Sperre).")
+              else:
+                  print("  → API-Verbindung fehlgeschlagen.")
+
+              if attempt < max_attempts:
+                  wait = attempt * 10
+                  print(f"  Warte {wait}s vor nächstem Versuch…")
+                  time.sleep(wait)
+
+          print("FAIL: Nach 3 Versuchen weiterhin 0 Ergebnisse.")
+          print("Wahrscheinlich IP-Blocking durch Shpock (GitHub Actions / Azure West US).")
+          print("Falls der Scraper lokal funktioniert, ist dies kein Code-Fehler.")
+          sys.exit(1)
           PYEOF
