@@ -34,7 +34,7 @@ Alle Suchbegriffe — auch einwörtige — werden mit `\b`-Wortgrenzen (Regex) g
 Stichworte wie „defekt" oder „bastler" können zeilenweise in die Blacklist eingetragen werden. Groß-/Kleinschreibung wird ignoriert. Blacklistete Anzeigen werden still übersprungen — kein Speichern, keine Benachrichtigung.
 
 ### Sprachfilter
-Optionaler Filter, der Anzeigen in unerwünschten Sprachen herausfiltert (Settings → Crawler & Daten). Aktiviert: `crawler_lang_filter_enabled = 1`, erlaubte Sprachen kommagetrennt in `crawler_lang_filter_langs` (Default: `de`). Texte kürzer als 20 Zeichen sowie nicht erkennbare Sprachen werden durchgelassen. Spracherkennung via `langdetect`-Bibliothek (lazy import — kein Fehler wenn nicht installiert).
+Optionaler Filter, der Anzeigen in unerwünschten Sprachen herausfiltert (Settings → Crawler & Daten). Aktiviert: `crawler_lang_filter_enabled = 1`, erlaubte Sprachen kommagetrennt in `crawler_lang_filter_langs` (Default: `de`). Bei Beschreibungen ab 40 Zeichen wird die Beschreibung analysiert. Bei kurzer oder fehlender Beschreibung prüft der Filter Titel und Beschreibung gemeinsam mit einer strengeren Konfidenzschwelle. Entscheidend ist ausschließlich die wahrscheinlichste erkannte Sprache; eine erlaubte Sprache mit geringer Nebenwahrscheinlichkeit reicht nicht aus. Texte mit weniger als sechs Buchstaben, unsichere Erkennungen und technische Erkennungsfehler werden durchgelassen. Spracherkennung via `langdetect`-Bibliothek (lazy import — kein Fehler wenn nicht installiert).
 
 ### Radius-Filter
 Radius pro Plattform konfigurierbar in km. Geocoding über OpenStreetMap/Nominatim, Distanzberechnung via Haversine-Formel. Ergebnisse werden gecacht (kein doppelter API-Aufruf). **Radius 0 = kein Filter** (kein Geocoding-Aufruf).

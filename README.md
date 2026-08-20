@@ -8,7 +8,7 @@ Selbst gehostet und Docker-ready — läuft im Hintergrund auf einem Server, NAS
 ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey?logo=flask)
 ![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
 ![Windows](https://img.shields.io/badge/Windows-Installer-0078D4?logo=windows&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-630%20passed-brightgreen?logo=pytest)
+![Tests](https://img.shields.io/badge/Tests-663%20passed-brightgreen?logo=pytest)
 ![License](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey)
 [![Kleinanzeigen](https://github.com/descipar/marktcrawler/actions/workflows/scraper-health-kleinanzeigen.yml/badge.svg)](https://github.com/descipar/marktcrawler/actions/workflows/scraper-health-kleinanzeigen.yml)
 [![eBay](https://github.com/descipar/marktcrawler/actions/workflows/scraper-health-ebay.yml/badge.svg)](https://github.com/descipar/marktcrawler/actions/workflows/scraper-health-ebay.yml)
@@ -207,7 +207,7 @@ Anzeigen älter als 30 Tage werden automatisch bereinigt. **Favoriten werden dab
 
 **AND-Filter** — Bei Mehrwort-Suchbegriffen (z.B. „baby werder") müssen alle Wörter in Titel oder Beschreibung stehen. Anzeigen die nur eines der Wörter enthalten werden entfernt.
 
-**Sprachfilter** — Fremdsprachige Anzeigen (z.B. italienische Vinted-Listings) werden anhand der Beschreibung erkannt und entfernt. Nur aktiv wenn `--lang` angegeben oder der Sprachfilter in den Einstellungen aktiviert ist.
+**Sprachfilter** — Fremdsprachige Anzeigen (z.B. italienische Vinted-Listings) werden anhand der Beschreibung erkannt und entfernt. Fehlt eine ausreichend lange Beschreibung, wird zusätzlich der Titel mit einer strengeren Sicherheitsschwelle geprüft. Nur aktiv wenn `--lang` angegeben oder der Sprachfilter in den Einstellungen aktiviert ist.
 
 ```bash
 # Bericht (kein Löschen)

@@ -30,7 +30,10 @@ except ImportError:
 DATA_DIR = Path(os.environ.get("DATA_DIR", ROOT / "data"))
 DB_PATH = DATA_DIR / "baby_crawler.db"
 
-_LANG_FILTER_MIN_CHARS = 40
+_LANG_FILTER_DESCRIPTION_MIN_CHARS = 40
+_LANG_FILTER_TEXT_MIN_LETTERS = 6
+_LANG_FILTER_DESCRIPTION_CONFIDENCE = 0.60
+_LANG_FILTER_SHORT_TEXT_CONFIDENCE = 0.85
 
 try:
     from langdetect import DetectorFactory
@@ -49,24 +52,29 @@ def _matches_all_words(title: str, description: str, term: str) -> bool:
 
 
 def _is_lang_allowed(title: str, description: str, allowed_langs: list) -> bool:
-    if not allowed_langs or not _langdetect_available:
+    normalized_allowed = {str(lang).strip().lower() for lang in allowed_langs if str(lang).strip()}
+    if not normalized_allowed or not _langdetect_available:
         return True
     try:
         from langdetect import detect_langs
 
         desc = (description or "").strip()
-        if len(desc) < _LANG_FILTER_MIN_CHARS:
-            return True
+        if len(desc) >= _LANG_FILTER_DESCRIPTION_MIN_CHARS:
+            text = desc
+            confidence_threshold = _LANG_FILTER_DESCRIPTION_CONFIDENCE
+        else:
+            text = f"{title or ''} {desc}".strip()
+            if sum(char.isalpha() for char in text) < _LANG_FILTER_TEXT_MIN_LETTERS:
+                return True
+            confidence_threshold = _LANG_FILTER_SHORT_TEXT_CONFIDENCE
 
-        results = detect_langs(desc)
+        results = detect_langs(text)
         if not results:
             return True
-        best = results[0]
-        if best.prob < 0.60:
+        best = max(results, key=lambda result: result.prob)
+        if best.prob < confidence_threshold:
             return True
-        if any(r.lang in allowed_langs for r in results):
-            return True
-        return False
+        return best.lang.lower() in normalized_allowed
     except Exception:
         return True
 

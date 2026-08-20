@@ -283,12 +283,30 @@ class TestIsLangAllowed:
     def test_leere_allowed_langs_immer_true(self):
         assert _is_lang_allowed(make_listing(description="Bonjour le monde, ceci est une description"), []) is True
 
-    def test_zu_kurze_beschreibung_immer_true(self):
-        # Beschreibung unter 40 Zeichen → kein Filtern (Produktnamen-Schutz)
-        assert _is_lang_allowed(make_listing(description="Bébé vêtement"), ["de"]) is True
+    def test_kurze_fremdsprachige_beschreibung_mit_titel_wird_gefiltert(self):
+        with self._mock_detect_langs([self._lang("fr", 0.99)]) as mocked:
+            assert _is_lang_allowed(
+                make_listing(title="Vêtements pour bébé", description="Très joli"),
+                ["de"],
+            ) is False
+            mocked["langdetect"].detect_langs.assert_called_once_with(
+                "Vêtements pour bébé Très joli"
+            )
 
-    def test_keine_beschreibung_immer_true(self):
-        assert _is_lang_allowed(make_listing(description=""), ["de"]) is True
+    def test_fremdsprachiger_titel_ohne_beschreibung_wird_gefiltert(self):
+        with self._mock_detect_langs([self._lang("fr", 0.99)]) as mocked:
+            assert _is_lang_allowed(
+                make_listing(title="Poussette bébé en très bon état", description=""),
+                ["de"],
+            ) is False
+            mocked["langdetect"].detect_langs.assert_called_once_with(
+                "Poussette bébé en très bon état"
+            )
+
+    def test_sehr_kurzer_text_wird_durchgelassen(self):
+        with self._mock_detect_langs([self._lang("fr")]) as mocked:
+            assert _is_lang_allowed(make_listing(title="Bébé", description=""), ["de"]) is True
+            mocked["langdetect"].detect_langs.assert_not_called()
 
     def test_erkannte_sprache_erlaubt(self):
         with self._mock_detect_langs([self._lang("de")]):
@@ -311,12 +329,26 @@ class TestIsLangAllowed:
                 ["de"],
             ) is True
 
-    def test_erlaubte_sprache_in_ergebnissen_gibt_true(self):
-        # Englisch dominant aber Deutsch taucht auf → behalten
+    def test_erlaubte_nebensprache_reicht_nicht(self):
+        # Nur die wahrscheinlichste Sprache zählt.
         with self._mock_detect_langs([self._lang("en", 0.75), self._lang("de", 0.25)]):
             assert _is_lang_allowed(
-                make_listing(description="Ergobaby carrier baby Babytrage sehr gut erhalten neuwertig"),
+                make_listing(description="Nice baby carrier in very good condition and barely used"),
                 ["de"],
+            ) is False
+
+    def test_ergebnisreihenfolge_aendert_beste_sprache_nicht(self):
+        with self._mock_detect_langs([self._lang("de", 0.10), self._lang("fr", 0.90)]):
+            assert _is_lang_allowed(
+                make_listing(description="Cette poussette pour bébé est en excellent état général"),
+                ["de"],
+            ) is False
+
+    def test_erlaubte_sprachen_werden_normalisiert(self):
+        with self._mock_detect_langs([self._lang("de")]):
+            assert _is_lang_allowed(
+                make_listing(description="Sehr gut erhalten, kaum benutzt, aus tierfreiem Haushalt"),
+                [" DE "],
             ) is True
 
     def test_mehrere_erlaubte_sprachen(self):

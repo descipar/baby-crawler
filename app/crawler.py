@@ -89,7 +89,10 @@ def _matches_all_words(listing: Listing, term: str) -> bool:
     return all(bool(re.search(r"\b" + re.escape(w) + r"\b", text)) for w in words)
 
 
-_LANG_FILTER_MIN_CHARS = 40
+_LANG_FILTER_DESCRIPTION_MIN_CHARS = 40
+_LANG_FILTER_TEXT_MIN_LETTERS = 6
+_LANG_FILTER_DESCRIPTION_CONFIDENCE = 0.60
+_LANG_FILTER_SHORT_TEXT_CONFIDENCE = 0.85
 
 try:
     from langdetect import DetectorFactory as _DetectorFactory
@@ -101,29 +104,34 @@ except ImportError:
 def _is_lang_allowed(listing: Listing, allowed_langs: List[str]) -> bool:
     """Gibt True wenn die Sprache erlaubt ist oder nicht sicher erkannt werden kann.
 
-    Strategie: Primär wird die Beschreibung analysiert (natürliche Sprache).
-    Nur wenn diese zu kurz ist, wird Titel+Beschreibung kombiniert – dann aber
-    mit höherer Konfidenzschwelle (0.85) um False-Positives durch englische
-    Produktnamen in deutschen Titeln zu vermeiden.
+    Lange Beschreibungen werden allein analysiert. Bei kurzer oder fehlender
+    Beschreibung wird Titel+Beschreibung mit einer strengeren
+    Konfidenzschwelle geprüft. Dadurch werden auch API-Treffer ohne Beschreibung
+    gefiltert, ohne sehr kurze Produktnamen vorschnell abzulehnen.
     """
-    if not allowed_langs:
+    normalized_allowed = {str(lang).strip().lower() for lang in allowed_langs if str(lang).strip()}
+    if not normalized_allowed:
         return True
     try:
         from langdetect import detect_langs
 
         desc = (listing.description or "").strip()
-        if len(desc) < _LANG_FILTER_MIN_CHARS:
-            return True  # Beschreibung zu kurz → nicht filtern; Titel enthält oft Produktnamen
+        if len(desc) >= _LANG_FILTER_DESCRIPTION_MIN_CHARS:
+            text = desc
+            confidence_threshold = _LANG_FILTER_DESCRIPTION_CONFIDENCE
+        else:
+            text = f"{listing.title or ''} {desc}".strip()
+            if sum(char.isalpha() for char in text) < _LANG_FILTER_TEXT_MIN_LETTERS:
+                return True
+            confidence_threshold = _LANG_FILTER_SHORT_TEXT_CONFIDENCE
 
-        results = detect_langs(desc)
+        results = detect_langs(text)
         if not results:
             return True
-        best = results[0]
-        if best.prob < 0.60:
+        best = max(results, key=lambda result: result.prob)
+        if best.prob < confidence_threshold:
             return True
-        if any(r.lang in allowed_langs for r in results):
-            return True
-        return False
+        return best.lang.lower() in normalized_allowed
     except Exception:
         return True
 
@@ -138,7 +146,14 @@ def run_crawl(platform: str, manual: bool = False) -> dict:
 
     _started_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds")
     _term_count = 0
-    stats = {"new": 0, "total": 0, "errors": 0, "skipped_blacklist": 0, "free": 0}
+    stats = {
+        "new": 0,
+        "total": 0,
+        "errors": 0,
+        "skipped_blacklist": 0,
+        "skipped_lang": 0,
+        "free": 0,
+    }
     try:
         if is_first:
             clear_log()
@@ -207,7 +222,7 @@ def run_crawl(platform: str, manual: bool = False) -> dict:
                         continue
 
                     if lang_filter and not _is_lang_allowed(listing, allowed_langs):
-                        stats["skipped_lang"] = stats.get("skipped_lang", 0) + 1
+                        stats["skipped_lang"] += 1
                         logger.debug(f"Sprachfilter: '{listing.title}'")
                         continue
 
@@ -244,7 +259,8 @@ def run_crawl(platform: str, manual: bool = False) -> dict:
 
         logger.info(
             f"[{platform}] Crawl beendet: {stats['new']} neu / {stats['total']} gesamt / "
-            f"{stats['skipped_blacklist']} Blacklist / {stats['free']} gratis / "
+            f"{stats['skipped_blacklist']} Blacklist / {stats['skipped_lang']} Sprache / "
+            f"{stats['free']} gratis / "
             f"{stats['errors']} Fehler"
         )
 

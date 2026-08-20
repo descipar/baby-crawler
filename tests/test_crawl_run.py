@@ -113,6 +113,52 @@ class TestRunCrawlOrchestration:
         assert result["skipped_blacklist"] == 1
         mock_save.assert_not_called()
 
+    def test_aktivierter_sprachfilter_filtert_listing_vor_dem_speichern(self, patched_db):
+        listing = make_listing(title="Poussette bébé en très bon état", listing_id="lang-fr-1")
+        mock_scraper = MagicMock()
+        mock_scraper.search.return_value = [listing]
+
+        settings = {
+            **_BASE_SETTINGS,
+            "crawler_lang_filter_enabled": "1",
+            "crawler_lang_filter_langs": "de",
+        }
+        with patch("app.crawler.KleinanzeigenScraper", return_value=mock_scraper), \
+             patch("app.crawler.db.get_settings", return_value=settings), \
+             patch("app.crawler.db.get_search_terms", return_value=[{"term": "bébé"}]), \
+             patch("app.crawler._is_lang_allowed", return_value=False) as mock_lang_allowed, \
+             patch("app.crawler.db.save_listing", return_value=True) as mock_save, \
+             patch("app.crawler.db.clear_old_listings"), \
+             patch("app.crawler.db.set_setting"), \
+             patch("app.crawler.notify"):
+            result = crawler_module.run_crawl("kleinanzeigen")
+
+        assert result["new"] == 0
+        assert result["skipped_lang"] == 1
+        mock_lang_allowed.assert_called_once_with(listing, ["de"])
+        mock_save.assert_not_called()
+
+    def test_deaktivierter_sprachfilter_prueft_sprache_nicht(self, patched_db):
+        listing = make_listing(listing_id="lang-off-1")
+        mock_scraper = MagicMock()
+        mock_scraper.search.return_value = [listing]
+
+        with patch("app.crawler.KleinanzeigenScraper", return_value=mock_scraper), \
+             patch("app.crawler.db.get_settings", return_value=_BASE_SETTINGS), \
+             patch("app.crawler.db.get_search_terms", return_value=[{"term": "kinderwagen"}]), \
+             patch("app.crawler._is_lang_allowed") as mock_lang_allowed, \
+             patch("app.crawler.db.save_listing", return_value=True) as mock_save, \
+             patch("app.crawler.db.clear_old_listings"), \
+             patch("app.crawler.db.set_setting"), \
+             patch("app.crawler.db.update_listing_distance"), \
+             patch("app.crawler.notify"):
+            result = crawler_module.run_crawl("kleinanzeigen")
+
+        assert result["new"] == 1
+        assert result["skipped_lang"] == 0
+        mock_lang_allowed.assert_not_called()
+        mock_save.assert_called_once()
+
     def test_gratis_listings_werden_gezaehlt(self, patched_db):
         listing = make_listing(listing_id="free-1", price="0 €")
         mock_scraper = MagicMock()
