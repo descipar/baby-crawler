@@ -283,25 +283,37 @@ class TestIsLangAllowed:
     def test_leere_allowed_langs_immer_true(self):
         assert _is_lang_allowed(make_listing(description="Bonjour le monde, ceci est une description"), []) is True
 
-    def test_kurze_fremdsprachige_beschreibung_mit_titel_wird_gefiltert(self):
+    def test_kurze_fremdsprachige_beschreibung_wird_nicht_geraten(self):
         with self._mock_detect_langs([self._lang("fr", 0.99)]) as mocked:
             assert _is_lang_allowed(
                 make_listing(title="Vêtements pour bébé", description="Très joli"),
                 ["de"],
-            ) is False
-            mocked["langdetect"].detect_langs.assert_called_once_with(
-                "Vêtements pour bébé Très joli"
-            )
+            ) is True
+            mocked["langdetect"].detect_langs.assert_not_called()
 
-    def test_fremdsprachiger_titel_ohne_beschreibung_wird_gefiltert(self):
+    def test_produkttitel_ohne_beschreibung_wird_nicht_geraten(self):
         with self._mock_detect_langs([self._lang("fr", 0.99)]) as mocked:
             assert _is_lang_allowed(
                 make_listing(title="Poussette bébé en très bon état", description=""),
                 ["de"],
+            ) is True
+            mocked["langdetect"].detect_langs.assert_not_called()
+
+    def test_deutscher_produkttitel_wird_trotz_falscher_erkennung_behalten(self):
+        with self._mock_detect_langs([self._lang("pl", 0.9999)]) as mocked:
+            assert _is_lang_allowed(
+                make_listing(title="Momcozy M5 Milchpumpe - wie neu", description=""),
+                ["de"],
+            ) is True
+            mocked["langdetect"].detect_langs.assert_not_called()
+
+    def test_kurze_natuerliche_beschreibung_wird_gefiltert(self):
+        with self._mock_detect_langs([self._lang("fr", 0.99)]) as mocked:
+            assert _is_lang_allowed(
+                make_listing(title="Momcozy", description="Très peu utilisé."),
+                ["de"],
             ) is False
-            mocked["langdetect"].detect_langs.assert_called_once_with(
-                "Poussette bébé en très bon état"
-            )
+            mocked["langdetect"].detect_langs.assert_called_once_with("Très peu utilisé.")
 
     def test_sehr_kurzer_text_wird_durchgelassen(self):
         with self._mock_detect_langs([self._lang("fr")]) as mocked:
@@ -331,14 +343,14 @@ class TestIsLangAllowed:
 
     def test_erlaubte_nebensprache_reicht_nicht(self):
         # Nur die wahrscheinlichste Sprache zählt.
-        with self._mock_detect_langs([self._lang("en", 0.75), self._lang("de", 0.25)]):
+        with self._mock_detect_langs([self._lang("en", 0.95), self._lang("de", 0.05)]):
             assert _is_lang_allowed(
                 make_listing(description="Nice baby carrier in very good condition and barely used"),
                 ["de"],
             ) is False
 
     def test_ergebnisreihenfolge_aendert_beste_sprache_nicht(self):
-        with self._mock_detect_langs([self._lang("de", 0.10), self._lang("fr", 0.90)]):
+        with self._mock_detect_langs([self._lang("de", 0.04), self._lang("fr", 0.96)]):
             assert _is_lang_allowed(
                 make_listing(description="Cette poussette pour bébé est en excellent état général"),
                 ["de"],

@@ -117,6 +117,7 @@ class TestRunCrawlOrchestration:
         listing = make_listing(title="Poussette bébé en très bon état", listing_id="lang-fr-1")
         mock_scraper = MagicMock()
         mock_scraper.search.return_value = [listing]
+        mock_scraper.enrich_listing.return_value = listing
 
         settings = {
             **_BASE_SETTINGS,
@@ -135,8 +136,31 @@ class TestRunCrawlOrchestration:
 
         assert result["new"] == 0
         assert result["skipped_lang"] == 1
+        mock_scraper.enrich_listing.assert_called_once_with(listing)
         mock_lang_allowed.assert_called_once_with(listing, ["de"])
         mock_save.assert_not_called()
+
+    def test_bekanntes_listing_wird_nicht_erneut_angereichert(self, patched_db):
+        listing = make_listing(listing_id="known-lang-1")
+        assert patched_db.save_listing(listing) is True
+        mock_scraper = MagicMock()
+        mock_scraper.search.return_value = [listing]
+        settings = {
+            **_BASE_SETTINGS,
+            "crawler_lang_filter_enabled": "1",
+            "crawler_lang_filter_langs": "de",
+        }
+
+        with patch("app.crawler.KleinanzeigenScraper", return_value=mock_scraper), \
+             patch("app.crawler.db.get_settings", return_value=settings), \
+             patch("app.crawler.db.get_search_terms", return_value=[{"term": "kinderwagen"}]), \
+             patch("app.crawler.db.clear_old_listings"), \
+             patch("app.crawler.db.set_setting"), \
+             patch("app.crawler.notify"):
+            result = crawler_module.run_crawl("kleinanzeigen")
+
+        assert result["new"] == 0
+        mock_scraper.enrich_listing.assert_not_called()
 
     def test_deaktivierter_sprachfilter_prueft_sprache_nicht(self, patched_db):
         listing = make_listing(listing_id="lang-off-1")

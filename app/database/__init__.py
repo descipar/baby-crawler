@@ -26,6 +26,7 @@ from .search_terms import (
 
 from .listings import (
     is_dismissed,
+    is_known_listing,
     dismiss_listing,
     save_listing,
     update_listing_distance,
@@ -84,7 +85,7 @@ __all__ = [
     "get_search_terms", "add_search_term", "delete_search_term",
     "toggle_search_term", "update_term_max_price",
     # listings
-    "is_dismissed", "dismiss_listing", "save_listing", "update_listing_distance",
+    "is_dismissed", "is_known_listing", "dismiss_listing", "save_listing", "update_listing_distance",
     "toggle_favorite", "update_listing_note", "find_duplicate_platform",
     "get_distinct_platforms", "get_platform_counts", "get_listings", "get_listing_count",
     "get_listing_by_id", "get_listings_today", "get_unnotified_listings",

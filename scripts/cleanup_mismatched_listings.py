@@ -30,10 +30,8 @@ except ImportError:
 DATA_DIR = Path(os.environ.get("DATA_DIR", ROOT / "data"))
 DB_PATH = DATA_DIR / "baby_crawler.db"
 
-_LANG_FILTER_DESCRIPTION_MIN_CHARS = 40
-_LANG_FILTER_TEXT_MIN_LETTERS = 6
-_LANG_FILTER_DESCRIPTION_CONFIDENCE = 0.60
-_LANG_FILTER_SHORT_TEXT_CONFIDENCE = 0.85
+_LANG_FILTER_MIN_LETTERS = 12
+_LANG_FILTER_CONFIDENCE = 0.95
 
 try:
     from langdetect import DetectorFactory
@@ -59,20 +57,14 @@ def _is_lang_allowed(title: str, description: str, allowed_langs: list) -> bool:
         from langdetect import detect_langs
 
         desc = (description or "").strip()
-        if len(desc) >= _LANG_FILTER_DESCRIPTION_MIN_CHARS:
-            text = desc
-            confidence_threshold = _LANG_FILTER_DESCRIPTION_CONFIDENCE
-        else:
-            text = f"{title or ''} {desc}".strip()
-            if sum(char.isalpha() for char in text) < _LANG_FILTER_TEXT_MIN_LETTERS:
-                return True
-            confidence_threshold = _LANG_FILTER_SHORT_TEXT_CONFIDENCE
+        if sum(char.isalpha() for char in desc) < _LANG_FILTER_MIN_LETTERS:
+            return True
 
-        results = detect_langs(text)
+        results = detect_langs(desc)
         if not results:
             return True
         best = max(results, key=lambda result: result.prob)
-        if best.prob < confidence_threshold:
+        if best.prob < _LANG_FILTER_CONFIDENCE:
             return True
         return best.lang.lower() in normalized_allowed
     except Exception:

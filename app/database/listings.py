@@ -30,6 +30,21 @@ def is_dismissed(listing_id: str) -> bool:
     return row is not None
 
 
+def is_known_listing(listing_id: str) -> bool:
+    """Prüft schnell, ob eine Anzeige gespeichert oder dauerhaft ausgeblendet ist."""
+    if not listing_id:
+        return False
+    with _db() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM listings WHERE listing_id=? "
+            "UNION ALL "
+            "SELECT 1 FROM dismissed_listings WHERE listing_id=? "
+            "LIMIT 1",
+            (listing_id, listing_id),
+        ).fetchone()
+    return row is not None
+
+
 def dismiss_listing(db_id: int):
     with _db() as conn:
         row = conn.execute("SELECT listing_id FROM listings WHERE id=?", (db_id,)).fetchone()

@@ -61,6 +61,10 @@ class BaseScraper(ABC):
     def search(self, term: str, max_results: int = 20) -> List[Listing]:
         """Sucht nach `term` und gibt maximal `max_results` Listings zurück."""
 
+    def enrich_listing(self, listing: Listing) -> Listing:
+        """Lädt bei Bedarf zusätzliche Detaildaten für ein Suchergebnis."""
+        return listing
+
 
 def price_within_limit(price_str: str, max_price: Optional[float]) -> bool:
     """Gibt True zurück wenn price_str <= max_price (oder kein Limit gesetzt)."""

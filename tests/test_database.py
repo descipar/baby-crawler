@@ -123,6 +123,19 @@ class TestListings:
         assert ok is False
         assert temp_db.get_listing_count() == 1
 
+    def test_is_known_listing_findet_gespeicherte_anzeige(self, temp_db):
+        temp_db.save_listing(make_listing("known-001"))
+        assert temp_db.is_known_listing("known-001") is True
+
+    def test_is_known_listing_findet_dismissed_anzeige(self, temp_db):
+        temp_db.save_listing(make_listing("known-dismissed-001"))
+        db_id = temp_db.get_listings()[0]["id"]
+        temp_db.dismiss_listing(db_id)
+        assert temp_db.is_known_listing("known-dismissed-001") is True
+
+    def test_is_known_listing_unbekannt_false(self, temp_db):
+        assert temp_db.is_known_listing("unknown-001") is False
+
     def test_mehrere_anzeigen(self, temp_db):
         for i in range(5):
             temp_db.save_listing(make_listing(f"multi-{i:03d}"))

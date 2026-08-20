@@ -9,7 +9,7 @@ from app.scrapers.base import BaseScraper, Listing
 from app.scrapers.ebay import EbayScraper
 from app.scrapers.kleinanzeigen import KleinanzeigenScraper
 from app.scrapers.shpock import ShpockScraper
-from app.scrapers.vinted import VintedScraper
+from app.scrapers.vinted import VintedScraper, _description_cache
 from app.scrapers.willhaben import WillhabenScraper, _attr
 from app.scrapers.markt import MarktdeScraper, _city_slug
 
@@ -187,6 +187,82 @@ class TestVintedScraper:
             with patch("app.scrapers.vinted.geocode") as mock_geocode:
                 scraper.search("babywanne")
         mock_geocode.assert_not_called()
+
+    def test_detailbeschreibung_wird_aus_meta_tag_geladen(self):
+        _description_cache.clear()
+        scraper = self._scraper()
+        title = "Momcozy Air 1"
+        detail = "Bonjour, ce tire-lait portable est neuf et encore dans son emballage d'origine."
+        html = (
+            '<html><head><meta name="description" '
+            f'content="{title} - {detail}"/></head><body>großer Rest</body></html>'
+        )
+        response = MagicMock()
+        response.encoding = "utf-8"
+        response.iter_content.return_value = [html.encode()]
+        response.raise_for_status = MagicMock()
+
+        with patch.object(scraper.session, "get", return_value=response) as mock_get:
+            listing = Listing("Vinted", title, "50 €", "", "https://www.vinted.de/items/991-test", "vt_991")
+            enriched = scraper.enrich_listing(listing)
+
+        assert enriched.description == detail
+        mock_get.assert_called_once_with(listing.url, timeout=15, stream=True)
+        response.close.assert_called_once()
+
+    def test_detailbeschreibung_wird_prozessweit_gecached(self):
+        _description_cache.clear()
+        scraper = self._scraper()
+        url = "https://www.vinted.de/items/992-test"
+        _description_cache[url] = "Ausführliche deutsche Beschreibung aus dem Cache für diesen Artikel."
+        listing = Listing("Vinted", "Kinderwagen", "50 €", "", url, "vt_992")
+
+        with patch.object(scraper.session, "get") as mock_get:
+            scraper.enrich_listing(listing)
+
+        assert listing.description.startswith("Ausführliche deutsche Beschreibung")
+        mock_get.assert_not_called()
+
+    def test_fremde_detail_url_wird_nicht_aufgerufen(self):
+        scraper = self._scraper()
+        listing = Listing("Vinted", "Test", "10 €", "", "https://example.com/items/1", "vt_993")
+        with patch.object(scraper.session, "get") as mock_get:
+            scraper.enrich_listing(listing)
+        assert listing.description == ""
+        mock_get.assert_not_called()
+
+    def test_detailfehler_laesst_beschreibung_unveraendert(self):
+        _description_cache.clear()
+        scraper = self._scraper()
+        listing = Listing(
+            "Vinted", "Test", "10 €", "", "https://www.vinted.de/items/994-test", "vt_994",
+            description="Kurz",
+        )
+        with patch.object(scraper.session, "get", side_effect=ConnectionError("Timeout")):
+            scraper.enrich_listing(listing)
+        assert listing.description == "Kurz"
+
+    def test_detailabruf_wird_einmal_wiederholt(self):
+        _description_cache.clear()
+        scraper = self._scraper()
+        title = "Kinderwagen"
+        detail = "Sehr guter Zustand und nur wenige Male benutzt."
+        html = f'<html><head><meta name="description" content="{title} - {detail}"/></head></html>'
+        response = MagicMock()
+        response.encoding = "utf-8"
+        response.iter_content.return_value = [html.encode()]
+        listing = Listing(
+            "Vinted", title, "50 €", "", "https://www.vinted.de/items/995-test", "vt_995"
+        )
+
+        with patch.object(
+            scraper.session, "get", side_effect=[ConnectionError("Timeout"), response]
+        ) as mock_get, patch("app.scrapers.vinted.time.sleep") as mock_sleep:
+            scraper.enrich_listing(listing)
+
+        assert listing.description == detail
+        assert mock_get.call_count == 2
+        mock_sleep.assert_called_once_with(0.25)
 
 
 # ── Shpock ────────────────────────────────────────────────────────────────────
